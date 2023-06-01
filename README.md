@@ -7,7 +7,8 @@ Namgyu Ho, Laura Schmid, and Se-young Yun.
 **🚀 Accepted to ACL 2023.**
 
 This repository contains code for (1) running CoT reasoning on OpenAI models,
-and (2) apply Fine-tune-CoT to train students based on OpenAI models *or* custom models such as T5, GPT-2 on your GPUs.
+and (2) apply Fine-tune-CoT to train students based on OpenAI models *or* custom open-source models such as T5, Flan-T5, GPT-2 on your GPUs, based on 🤗 and Pytorch Lightning.
+
 
 ## Getting Started
 
@@ -30,19 +31,45 @@ pip install -r requirements.txt
 python setup.py develop
 ```
 
-## Resources
 
-### Teacher, student inference data
 
-Will be available for download soon!
+## Data 🚀
 
-### Template-based split (paper Appendix E.3)
+We're proud to share *all* of our raw experimental data! All data is organized in json or jsonl format, for your pleasure :)
+
+Cloud storage folder links:
+
+- [Dropbox](https://www.dropbox.com/sh/hwcncpyomx87h20/AACqgVdd-ZzBQ3ncJcKqw0cVa?dl=0)
+- [Google Drive](https://drive.google.com/drive/folders/1C6kah3WV36N8omlUl-TeU9tsJADZNaJV?usp=share_link)
+
+### File List
+
+- `dataset.tar.gz`: 12 task datasets compiled in a unified json format
+  - Belongs in `PROJECT/data/dataset/`
+- `completion_data.tar.gz`: Completion data, i.e., inference data, from all teachers and students, for *all* experiments. About 8GB when uncompressed
+  - Belongs in `PROJECT/saved/completion_data/`
+- `teacher_completion_data.tar.gz`: Completion data from Zero-shot-CoT (with diverse reasoning) on the default teacher model `text-davinci-002` using the OpenAI API. About 💰 $1000+ worth of goods, with ❤️ from [OSI LAB](http://osi.kaist.ac.kr) at [KAIST](https://kaist.ac.kr) . Subset of `completion_data.tar.gz`.
+  - Belongs in `PROJECT/saved/completion_data/`.
+- `finetune_data.tar.gz`: *All* data used to fine-tune OpenAI students via the fine-tuning API, in jsonl format. These are derived from teacher completion data and can be generated from our code.
+  - Belongs in `PROJECT/saved/finetune_data/`
+
+### Generate Paper Results
+
+After downloading the full `completion_data.tar.gz`, you can run `notebooks/results.ipynb` to generate *all* result tables and figures from our paper. The code will (re-)evaluate all raw text model outputs contained in the completion data.
+
+
+
+## Additional Resources
+
+### Template-based Split (Paper Appendix E.3)
 
 Template-based splits for MultiArith and Date Understanding are saved in `/data/splits/*__template.json`
 
 ### Few-shot Prompts
 
 Few-shot prompts adapted from Wei 2022 are saved in `/data/few_shot_cot_prompts.json`
+
+
 
 ## Data Structures
 
@@ -93,6 +120,8 @@ Few-shot prompts adapted from Wei 2022 are saved in `/data/few_shot_cot_prompts.
   }
 }
 ```
+
+
 
 ## Data Organization
 
