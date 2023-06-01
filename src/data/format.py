@@ -8,7 +8,7 @@ from typing import Dict, List
 from data.few_shot_cot_prompt import get_few_shot_cot_prompt
 
 SUPPORTED_MODEL_TYPES = ["decoder", "encoder_decoder"]
-SUPPORTED_PREDICTION_TEMPLATES = ["ft_token", "ft_cot_natural", "ft_cot_token", "zs_cot", "fs_cot"]
+SUPPORTED_PREDICTION_TEMPLATES = ["ft_token", "ft_cot_natural", "ft_cot_token", "zs", "zs_cot", "fs_cot"]
 
 
 class Formatter:
@@ -37,7 +37,18 @@ class Formatter:
 
         if prediction_template == "ft_natural":
             if model_type == "decoder":
-                self.input_format = "{sample[question]}\n\n###\n\n"
+                self.input_format = "Q: {sample[question]}\n\nA:"
+                self.label_format = " {sample[answer]}"
+                # REPRODUCTION NOTE - GPT3 experiments in the paper use the following:
+                # self.input_format = "{sample[question]}\n\n ### \n\n"
+                # self.label_format = " {sample[answer]}"
+            elif model_type == "encoder_decoder":
+                self.input_format = "Q: {sample[question]}"
+                self.label_format = "{sample[answer]}"
+
+        if prediction_template == "ft_token":
+            if model_type == "decoder":
+                self.input_format = "{sample[question]} ###"
                 self.label_format = " {sample[answer]}"
                 # REPRODUCTION NOTE - GPT3 experiments in the paper use the following:
                 # self.input_format = "{sample[question]}\n\n ### \n\n"
@@ -68,6 +79,15 @@ class Formatter:
                 raise NotImplementedError("model_type={} not supported for prediction_template={}".format(
                     model_type, prediction_template))
 
+        if prediction_template == "zs":
+            self.label_format = None
+            if model_type == "decoder":
+                self.input_format = "Q: {sample[question]}\n\nA:"
+            elif model_type == "encoder_decoder":  # following SQuAD format used to train T5
+                self.input_format = "question: {sample[question]}"
+            else:
+                raise NotImplementedError("model_type={} not supported for zs_cot".format(model_type))
+
         if prediction_template == "zs_cot":
             self.label_format = None
             if model_type == "decoder":
@@ -88,8 +108,16 @@ class Formatter:
 
             if model_type == "decoder":
                 self.input_format = self.few_shot_prompt + "\nQ: {sample[question]}\nA:"
+            elif model_type == "encoder_decoder":
+                self.input_format = self.few_shot_prompt + "\nQ: {sample[question]}\nA:"
             else:
                 raise NotImplementedError("model_type={} not supported for fs_cot".format(model_type))
+
+        if not hasattr(self, "input_format"):
+            raise NotImplementedError(f"{model_type}, {prediction_template}")
+        if not hasattr(self, "label_format"):
+            # should be set to None if not supported
+            raise NotImplementedError(f"{model_type}, {prediction_template}")
 
     def __call__(self, sample: Dict, include_label: bool = False):
         """

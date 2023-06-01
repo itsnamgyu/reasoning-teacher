@@ -7,10 +7,13 @@ from data.completion_dataset import CompletionDataset
 
 PREDICTION_PREFIXES = {
     None: None,
+    "zs": None,
+    "ft_natural": None,
+    "ft_token": None,
+    "fs_cot": "The answer is",
     "zs_cot": None,
     "ft_cot_natural": "Therefore, the answer is",
     "ft_cot_token": "-->",
-    "fs_cot": "The answer is",
 }
 
 

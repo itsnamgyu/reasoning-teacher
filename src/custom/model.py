@@ -1,7 +1,7 @@
 """
-Provides a LightningModule for training encoder OR encoder_decoder models which provides:
+LightningModule for training encoder OR encoder_decoder models which provides:
 - Saving intermediate validation predictions as CompletionDataset
-- Logging intermediate validation metrics using the CompletionDataset
+- Logging intermediate validation metrics (from the CompletionDataset)
 """
 import copy
 import json
@@ -19,11 +19,11 @@ from evaluation.evaluator import Evaluator
 from evaluation.summary import summarize_evaluation
 
 
-class LM(pl.LightningModule):
+class Model(pl.LightningModule):
     validation_predictions: Dict
 
     def __init__(self, model, tokenizer: PreTrainedTokenizerBase, model_type: str, use_cpu_offload=False,
-                 completion_metadata: CompletionMetadata = None, lr=3e-4):
+                 completion_metadata: CompletionMetadata = None, lr=3e-4, truncate_early=True, max_length=1024):
         """
         - completion_metadata: metaddata used to save completions. If None, completions are not saved.
           `epoch_N` is appended to the `train_key` when saving intermediate validation completions.
@@ -35,6 +35,8 @@ class LM(pl.LightningModule):
         self.use_cpu_offload = use_cpu_offload
         self.completion_metadata = completion_metadata
         self.lr = lr
+        self.max_length = max_length
+        self.truncate_early = truncate_early
 
     def training_step(self, batch, batch_idx):
         kwargs = {
@@ -50,10 +52,10 @@ class LM(pl.LightningModule):
         """
         Returns outputs in dictionary format, since it's the only way that seems to work with `all_gather`
         """
-        if self.current_epoch < 2:
+        if self.current_epoch < 2 and self.truncate_early:
             max_length = 256
         else:
-            max_length = 1024
+            max_length = self.max_length
 
         if self.model_type == "encoder_decoder":
             output = self.model.generate(batch["input_ids"], max_length=max_length).detach()

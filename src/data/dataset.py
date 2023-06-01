@@ -49,7 +49,9 @@ class Dataset:
         self.metadata: EasyDict = EasyDict(raw_data["metadata"])
         self.data: List[Dict] = raw_data["data"]
 
-        self.dataset_key = self.metadata["dataset_key"]
+    @property
+    def dataset_key(self):
+        return self.metadata["dataset_key"]
 
     def __len__(self):
         return len(self.data)

@@ -5,6 +5,6 @@ DEVICES="0"
 
 for MODEL in ${MODELS[@]}; do
   for TARGET in ${TARGETS[@]}; do
-    python main.py --dataset_key $TARGET --model_key $MODEL --devices $DEVICES --batch_size 8 --inference_batch_size 32
+    python custom_train.py --dataset_key $TARGET --model_key $MODEL --train_key "ft_cot" --devices $DEVICES --batch_size 8 --inference_batch_size 32
   done
 done

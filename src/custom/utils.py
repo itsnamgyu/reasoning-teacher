@@ -40,3 +40,10 @@ def load_finetune_data(platform_key: str, finetune_key: str) -> Optional[dict]:
         return data
     else:
         return None
+
+
+def list_of_dicts_to_dict_of_lists(list_of_dict):
+    dict_of_lists = {}
+    for key in list_of_dict[0].keys():
+        dict_of_lists[key] = [d[key] for d in list_of_dict]
+    return dict_of_lists

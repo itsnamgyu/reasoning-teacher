@@ -3,23 +3,27 @@ import pytorch_lightning as pl
 import torch
 from torch.utils.data import DataLoader
 
-from custom.data_preprocess.cot import compile_cot_train_data, compile_cot_test_data
-from custom.data_preprocess.io import save_finetune_data, load_finetune_data
+from custom.utils import save_finetune_data, load_finetune_data, list_of_dicts_to_dict_of_lists
 from data.completion_dataset import CompletionDataset, CompletionIdentifier
 from data.dataset import DATASET_KEYS, Dataset
+from data.format import Formatter
 from data.split import load_train_test_split
 
-SUPPORTED_KEYS = ["zs_cot"] + ["zs_cot_t70_{}aug".format(aug) for aug in [1, 2, 4, 8, 16, 32, 64]]
+SUPPORTED_KEYS = ["zs", "fs_cot", "ft", "ft_cot"]
+SUPPORTED_KEYS += ["ft_cot_t70_{}aug".format(aug) for aug in [1, 2, 4, 8, 16, 32, 64]]
 SUPPORTED_MODEL_TYPES = ["decoder", "encoder_decoder"]
 
 
-class CoTDataModule(pl.LightningDataModule):
+class DataModule(pl.LightningDataModule):
     train_dataset: Dataset
     test_dataset: Dataset
 
     def __init__(self, dataset_key: str, preset_key: str, tokenizer, model_type: str, batch_size: int = 32,
                  inference_batch_size=None, num_workers: int = 8, append_eos=False):
         """
+        Note that padding is applied manually on the left side when `model_type=decoder`, therefore
+        `tokenizer.padding_side` is irrelevant.
+
         - model_type: `decoder` or `encoder_decoder`. Used as `platform_key` for saving fine-tune data.
         - append_eos: manually append eos token to the end of the label.
         """
@@ -43,42 +47,25 @@ class CoTDataModule(pl.LightningDataModule):
         self.num_workers = num_workers
         self.append_eos = append_eos
 
+        if self.preset_key == "zs":
+            self.finetune_key = None
+            self.prediction_template = "zs"
         if self.preset_key == "zs_cot":
+            self.finetune_key = None
+            self.prediction_template = "zs_cot"
+        if self.preset_key == "fs_cot":
+            self.finetune_key = None
+            self.prediction_template = "fs_cot"
+        if self.preset_key == "ft":
+            self.finetune_key = self.dataset_key
+            self.prediction_template = "ft_token"
+        if self.preset_key == "ft_cot":
             self.finetune_key = "zs_cot_{}".format(self.dataset_key)
-            self.target_prediction_template = "ft_cot_token"
+            self.prediction_template = "ft_cot_token"
         for aug in [1, 2, 4, 8, 16, 32, 64]:
-            if self.preset_key == "zs_cot_t70_{}aug".format(aug):
+            if self.preset_key == "ft_cot_t70_{}aug".format(aug):
                 self.finetune_key = "zs_cot_t70_{}_{}aug".format(self.dataset_key, aug)
-                self.target_prediction_template = "ft_cot_token"
-
-    def prepare_data(self):
-        """
-        Prepare training (finetune) data and save to finetune data file.
-        """
-        # Defaults (may be overridden by some presets)
-        train, test = load_train_test_split(self.dataset_key)
-        completion_indices = [0]
-
-        # Preset-specific
-        train_data = None
-        if self.preset_key == "zs_cot":
-            completion_identifier = CompletionIdentifier("text-davinci-002", "zs_cot", self.dataset_key)
-            completion_dataset = CompletionDataset.load(completion_identifier)
-            train_data = compile_cot_train_data(completion_dataset, self.model_type, sample_indices=train,
-                                                completion_indices=completion_indices,
-                                                only_correct=True)
-        for aug in [1, 2, 4, 8, 16, 32, 64]:
-            if self.preset_key == "zs_cot_t70_{}aug".format(aug):
-                completion_indices = list(range(aug))
-                completion_identifier = CompletionIdentifier("text-davinci-002", "zs_cot_t70", self.dataset_key)
-                completion_dataset = CompletionDataset.load(completion_identifier)
-                train_data = compile_cot_train_data(completion_dataset, self.model_type, sample_indices=train,
-                                                    completion_indices=completion_indices,
-                                                    only_correct=True)
-        if train_data is None:
-            raise NotImplementedError(self.preset_key)
-
-        self.save_finetune_data(train_data)
+                self.prediction_template = "ft_cot_token"
 
     def save_finetune_data(self, train_data):
         save_finetune_data(train_data, platform_key=self.model_type, finetune_key=self.finetune_key)
@@ -88,10 +75,13 @@ class CoTDataModule(pl.LightningDataModule):
 
     def setup(self, stage: str = None):
         """
-        Load training data and compile test data. Training data is only loaded when `stage` == "fit"
+        Compile train/test data. Train data (i.e., finetune_data) is saved to disk according to finetune_key.
         """
         if stage == "fit":
             train_data = self.load_finetune_data()
+            if train_data is None:
+                train_data = self._compile_data(train=True)
+                self.save_finetune_data(train_data)
             dataset = datasets.Dataset.from_dict(train_data)
             dataset = dataset.map(self.tokenize, batched=True, batch_size=len(dataset))
             if self.model_type == "decoder":
@@ -104,9 +94,7 @@ class CoTDataModule(pl.LightningDataModule):
                 raise NotImplementedError(self.model_type)
             self.train_dataset = dataset
 
-        # Note, this is run for every GPU in distributed mode. Could be optimized to preload in `prepare_data` step
-        # (like train_data)
-        test_data = compile_cot_test_data(self.dataset_key, self.model_type)
+        test_data = self._compile_data(train=False)
         dataset = datasets.Dataset.from_dict(test_data)
         dataset = dataset.map(self.tokenize, batched=True, batch_size=len(dataset))
         dataset.set_format(type="torch", columns=["sample_index", "input_ids", "attention_mask"])
@@ -117,11 +105,16 @@ class CoTDataModule(pl.LightningDataModule):
             for i in range(len(example["label"])):
                 example["label"][i] += self.tokenizer.eos_token
 
+        if self.preset_key == "fs_cot":
+            input_max_length = 768
+        else:
+            input_max_length = 512
+
         if self.model_type == "encoder_decoder":
             it = self.tokenizer(
                 example["input"],
                 padding="longest",
-                max_length=512,
+                max_length=input_max_length,
                 truncation=True,
                 return_tensors="pt",
             )
@@ -148,10 +141,12 @@ class CoTDataModule(pl.LightningDataModule):
                 })
             return result
         elif self.model_type == "decoder":
-            # Encode full sequences
+            # Tokenize and apply left side padding manually
+
+            # Tokenize in vanilla Python list form
             it = self.tokenizer(
                 example["input"],
-                max_length=512,
+                max_length=input_max_length,
                 truncation=True
             )
             iids = it["input_ids"]
@@ -174,12 +169,15 @@ class CoTDataModule(pl.LightningDataModule):
                 attention_mask.append([1] * (len(iid) + len(lid)))
                 label_ids.append([-100] * len(iid) + lid)
 
+            # Pad full sequences
             lengths = torch.tensor(lengths)
             pad_lengths = (lengths.max() - lengths).tolist()
             for i, l in enumerate(pad_lengths):
-                input_ids[i] += [self.tokenizer.pad_token_id] * l
-                attention_mask[i] += [0] * l
-                label_ids[i] += [-100] * l
+                # Apply left side padding
+                # Why? https://github.com/huggingface/transformers/issues/3021#issuecomment-1231526631
+                input_ids[i] = [self.tokenizer.pad_token_id] * l + input_ids[i]
+                attention_mask[i] = [0] * l + attention_mask[i]
+                label_ids[i] = [-100] * l + label_ids[i]
             return {
                 "input_ids": torch.tensor(input_ids, dtype=torch.long),
                 "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
@@ -211,3 +209,40 @@ class CoTDataModule(pl.LightningDataModule):
             num_workers=self.num_workers,
             shuffle=False,
         )
+
+    def _compile_data(self, train=False):
+        train_indices, test_indices = load_train_test_split(self.dataset_key)
+        sample_indices = train_indices if train else test_indices
+
+        if self.preset_key == "fs_cot" and train:
+            raise NotImplementedError("fs_cot is not implemented for training.")
+
+        # Get list of samples based on preset key.
+        samples = None
+        if self.preset_key in ["zs", "fs_cot", "ft"] or not train:
+            dataset = Dataset.load(self.dataset_key)
+            samples = dataset.select_samples(sample_indices)
+        elif "ft_cot" in self.preset_key:
+            if self.preset_key == "ft_cot":
+                completion_identifier = CompletionIdentifier("text-davinci-002", "zs_cot", self.dataset_key)
+                completion_indices = [0]
+            else:
+                for aug in [1, 2, 4, 8, 16, 32, 64]:
+                    if self.preset_key == "ft_cot_t70_{}aug".format(aug):
+                        completion_identifier = CompletionIdentifier("text-davinci-002", "zs_cot_t70", self.dataset_key)
+                        completion_indices = list(range(aug))
+                        break
+                else:
+                    raise NotImplementedError(self.preset_key)
+            completion_dataset = CompletionDataset.load(completion_identifier)
+            samples = completion_dataset.select_samples(sample_indices, completion_indices, only_correct=True)
+
+        if samples is None:
+            raise NotImplementedError(self.preset_key)
+
+        # Format samples for model input/output.
+        formatter = Formatter(self.model_type, self.prediction_template, dataset_key=self.dataset_key)
+        formatted = formatter.format_samples(samples, include_labels=train)
+        data = list_of_dicts_to_dict_of_lists(formatted)
+
+        return data
