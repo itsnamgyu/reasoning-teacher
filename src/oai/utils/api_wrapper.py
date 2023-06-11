@@ -15,6 +15,7 @@ OPENAI_ERROR_LOG_PATH = os.path.join(SAVED_PATH, "openai_error_log.txt")
 
 def log_openai_error(message: str):
     timestamp = datetime.now().astimezone().isoformat()
+    os.makedirs(os.path.dirname(OPENAI_ERROR_LOG_PATH), exist_ok=True)
     with open(OPENAI_ERROR_LOG_PATH, "a") as f:
         f.write(" {} ".format(timestamp).center(80, "#"))
         f.write("\n")
@@ -96,10 +97,18 @@ def fetch_model_ids():
     """
     Fetches model ids for all finetunes that have been completed
     """
-    with open(FINETUNE_IDS_PATH) as f:
-        finetune_ids = json.load(f)
-    with open(MODEL_IDS_PATH) as f:
-        model_ids = json.load(f)
+    if os.path.exists(FINETUNE_IDS_PATH):
+        with open(FINETUNE_IDS_PATH) as f:
+            finetune_ids = json.load(f)
+    else:
+        raise FileNotFoundError(
+            "Finetune ids metadata file is missing. Create a finetune using `oai.api_wrapper.create_finetune`")
+
+    if os.path.exists(MODEL_IDS_PATH):
+        with open(MODEL_IDS_PATH) as f:
+            model_ids = json.load(f)
+    else:
+        model_ids = {}
 
     model_keys_to_fetch = []
     status_by_key = {}

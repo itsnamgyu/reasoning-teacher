@@ -81,9 +81,8 @@ def populate_completion_dataset(completion_dataset: CompletionDataset, dataset: 
 
         # Add completion sample dicts
         remaining = augs - len(completion_samples)
-        if remaining > 0:
-            for _ in range(remaining):
-                completion_samples.append(dict())
+        for _ in range(remaining):
+            completion_samples.append(dict())
 
         dataset_sample = dataset.data[i]
 

@@ -55,6 +55,7 @@ def set_json_value(json_path: str, key: str, value=None, on_exist="overwrite"):
         else:
             raise ValueError("Unsupported argument for `on_exist`: {}".format(on_exist))
 
+    os.makedirs(os.path.dirname(json_path), exist_ok=True)
     with open(json_path, "w") as f:
         json.dump(data, f, indent=4)
 

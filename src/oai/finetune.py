@@ -96,5 +96,6 @@ def _save_finetune_data(data: List[Dict], finetune_key):
         if existing != full_string:
             raise Exception("Finetune data already exists and is different from the given data.")
     else:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w") as f:
             f.write(full_string)
