@@ -19,7 +19,7 @@ on how to run Fine-tune-CoT from start to finish.
 
 ### Custom Experiments (on GPU) 
 
-Custom experiments are implemented in the `custom` module, based on PyTorch Lightning. Refer to `main.py`
+Custom experiments are implemented in the `custom` module, based on PyTorch Lightning. Refer to `custom_train.py`
 and `scripts/custom/*.sh` on how to fine-tune models such as T5, Flan-T5, and GPT-2 using Fine-tune-CoT.
 
 
