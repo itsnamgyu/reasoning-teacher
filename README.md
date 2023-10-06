@@ -22,8 +22,6 @@ on how to run Fine-tune-CoT from start to finish.
 Custom experiments are implemented in the `custom` module, based on PyTorch Lightning. Refer to `custom_train.py`
 and `scripts/custom/*.sh` on how to fine-tune models such as T5, Flan-T5, and GPT-2 using Fine-tune-CoT.
 
-
-
 ## Setup
 
 ```
@@ -31,7 +29,9 @@ pip install -r requirements.txt
 python setup.py develop
 ```
 
+### Environment
 
+The code has been tested on Python<=3.10, PyTorch Lightning<=1.9, PyTorch>=2.0
 
 ## Data 🚀
 
