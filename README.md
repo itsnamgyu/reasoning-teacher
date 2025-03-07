@@ -17,6 +17,10 @@ and (2) apply Fine-tune-CoT to train students based on OpenAI models *or* custom
 OpenAI API experiments are implemented in the `oai` module. Refer to `notebooks/example_oai_finetune_cot.ipynb`
 on how to run Fine-tune-CoT from start to finish.
 
+### Updates to OpenAI API
+
+Use the [Batch API](https://platform.openai.com/docs/guides/batch) to save costs for reasoning data collection, or use [parallel API requests](https://github.com/openai/openai-cookbook/blob/main/examples/api_request_parallel_processor.py) to accelerate immediate, large-scale data collection.
+
 ### Custom Experiments (on GPU) 
 
 Custom experiments are implemented in the `custom` module, based on PyTorch Lightning. Refer to `custom_train.py`
